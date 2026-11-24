@@ -24,7 +24,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1100,
+        1540,
         0
       ],
       "notes": "One item per search term. Change terms here; filters are in 'BA search'.",
@@ -38,7 +38,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1320,
+        1760,
         0
       ],
       "notes": "Unofficial public API (github.com/bundesAPI/jobsuche-api). X-API-Key is the public client id, not a secret.",
@@ -86,7 +86,8 @@
             }
           }
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "id": "a4",
@@ -94,12 +95,13 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1540,
+        1980,
         0
       ],
       "parameters": {
         "jsCode": "// One item per unique job (by referenznummer) across all search terms.\nconst seen = new Set();\nconst out = [];\nfor (const item of $input.all()) {\n  for (const job of item.json.ergebnisliste || []) {\n    const ref = job.referenznummer;\n    if (!ref || seen.has(ref)) continue;\n    seen.add(ref);\n    out.push({ json: { ...job, detailsKey: Buffer.from(ref).toString('base64') } });\n  }\n}\nreturn out;"
-      }
+      },
+      "alwaysOutputData": true
     },
     {
       "id": "a5",
@@ -107,7 +109,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1760,
+        2200,
         0
       ],
       "notes": "Full description. v4 is the details version that still answers; v6 details returns 403.",
@@ -139,13 +141,14 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1980,
+        2420,
         0
       ],
       "notes": "Common shape shared with the London source (P2-04).",
       "parameters": {
-        "jsCode": "// Map each Bundesagentur job to JobPilot's common job shape.\nconst MAX_DESC = 6000; // characters sent on to scoring\nconst list = $('Flatten + de-duplicate').all();\nreturn $input.all().map((item, i) => {\n  const s = list[i].json;            // search result (always there)\n  const d = item.json || {};         // details (may be an error)\n  const loc = (s.stellenlokationen || []).map(l => l.adresse?.ort).filter(Boolean);\n  const desc = (d.stellenangebotsBeschreibung || '').replace(/\\*\\*/g, '').replace(/\\n{3,}/g, '\\n\\n').trim();\n  const salary = s.gehaltsspanneVon ? `${s.gehaltsspanneVon}–${s.gehaltsspanneBis || ''} (${s.artDerVerguetung || ''})` : null;\n  return { json: {\n    id: `ba:${s.referenznummer}`,\n    source: 'bundesagentur',\n    market: 'DE',\n    title: (s.stellenangebotsTitel || '').trim(),\n    company: s.firma || null,\n    location: [...new Set(loc)].join(', ') || null,\n    remote: s.homeofficemoeglich ? (s.homeofficetyp || 'possible') : 'no',\n    published: s.datumErsteVeroeffentlichung || null,\n    salary,\n    description: desc.slice(0, MAX_DESC),\n    description_missing: !desc,\n    link: `https://www.arbeitsagentur.de/jobsuche/jobdetail/${s.referenznummer}`,\n    external_link: s.externeURL || null,\n  } };\n});"
-      }
+        "jsCode": "// Map each Bundesagentur job to JobPilot's common job shape.\nconst MAX_DESC = 6000; // characters sent on to scoring\nconst list = $('Flatten + de-duplicate').all();\nreturn $input.all().map((item, i) => [item, list[i]?.json]).filter(([, s]) => s?.referenznummer).map(([item, s]) => {\n  const d = item.json || {};         // details (may be an error)\n  const loc = (s.stellenlokationen || []).map(l => l.adresse?.ort).filter(Boolean);\n  const desc = (d.stellenangebotsBeschreibung || '').replace(/\\*\\*/g, '').replace(/\\n{3,}/g, '\\n\\n').trim();\n  const salary = s.gehaltsspanneVon ? `${s.gehaltsspanneVon}–${s.gehaltsspanneBis || ''} (${s.artDerVerguetung || ''})` : null;\n  return { json: {\n    id: `ba:${s.referenznummer}`,\n    source: 'bundesagentur',\n    market: 'DE',\n    title: (s.stellenangebotsTitel || '').trim(),\n    company: s.firma || null,\n    location: [...new Set(loc)].join(', ') || null,\n    remote: s.homeofficemoeglich ? (s.homeofficetyp || 'possible') : 'no',\n    published: s.datumErsteVeroeffentlichung || null,\n    salary,\n    description: desc.slice(0, MAX_DESC),\n    description_missing: !desc,\n    link: `https://www.arbeitsagentur.de/jobsuche/jobdetail/${s.referenznummer}`,\n    external_link: s.externeURL || null,\n  } };\n});"
+      },
+      "alwaysOutputData": true
     },
     {
       "id": "b2",
@@ -153,7 +156,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1100,
+        1540,
         240
       ],
       "notes": "One item per title phrase. Filters are in 'Adzuna search'.",
@@ -167,7 +170,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1320,
+        1760,
         240
       ],
       "notes": "Adzuna free tier, personal job search. app_id/app_key come from the 'Adzuna' Custom Auth credential, never from this file. Attribution: every London job shown must say 'Adzuna' linked to adzuna.co.uk.",
@@ -231,13 +234,14 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1540,
+        1980,
         240
       ],
       "notes": "Flatten, de-duplicate by Adzuna id, map to the common job shape.",
       "parameters": {
         "jsCode": "// One item per unique Adzuna job, in JobPilot's common job shape.\nconst seen = new Set();\nconst out = [];\nfor (const item of $input.all()) {\n  for (const j of item.json.results || []) {\n    if (!j.id || seen.has(j.id)) continue;\n    seen.add(j.id);\n    const salary = j.salary_min && !Number(j.salary_is_predicted)\n      ? `£${Math.round(j.salary_min)}–${j.salary_max ? Math.round(j.salary_max) : ''}` : null;\n    out.push({ json: {\n      id: `adzuna:${j.id}`,\n      source: 'adzuna',\n      market: 'UK',\n      title: (j.title || '').replace(/<[^>]+>/g, '').trim(),\n      company: j.company?.display_name || null,\n      location: j.location?.display_name || null,\n      remote: /remote|hybrid/i.test(`${j.title} ${j.description}`) ? 'mentioned' : 'not mentioned',\n      published: (j.created || '').slice(0, 10) || null,\n      salary,\n      description: (j.description || '').replace(/<[^>]+>/g, '').trim(), // Adzuna gives a snippet only\n      description_missing: !j.description,\n      link: j.redirect_url,\n      external_link: null,\n      attribution: 'Adzuna',\n    } });\n  }\n}\nreturn out;"
-      }
+      },
+      "alwaysOutputData": true
     },
     {
       "id": "c1",
@@ -245,7 +249,7 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        2200,
+        2640,
         120
       ],
       "notes": "DE + UK jobs in one list, ready for scoring (P2-05).",
@@ -315,12 +319,12 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2420,
+        2860,
         120
       ],
       "notes": "Cheap rule before the model: keep titles that name a product role. Saves Gemini quota.",
       "parameters": {
-        "jsCode": "// Keep only titles that look like product roles; the rest never reach Gemini.\n// Kept: product manager/owner/lead/head, Produktmanager(in), Produktverantwortliche(r), PO.\n// Dropped: titles without 'product'/'produkt', plus clear non-PM product jobs.\nconst KEEP = /(product|produkt)/i;\nconst DROP = /(marketing|trainer|training|control|approval|produktion|\\bsales\\b|vertrieb|designer|konstruk|qualit|praktik|werkstudent|intern\\b|azubi|ausbildung)/i;\nconst kept = $input.all().filter(i => KEEP.test(i.json.title) && !DROP.test(i.json.title));\nreturn kept;"
+        "jsCode": "// Keep only titles that look like product roles; the rest never reach Gemini.\n// Kept: product manager/owner/lead/head, Produktmanager(in), Produktverantwortliche(r), PO.\n// Dropped: titles without 'product'/'produkt', plus clear non-PM product jobs.\nconst KEEP = /(product|produkt)/i;\nconst DROP = /(marketing|trainer|training|control|approval|produktion|\\bsales\\b|vertrieb|designer|konstruk|qualit|praktik|werkstudent|intern\\b|azubi|ausbildung)/i;\nconst kept = $input.all().filter(i => i.json.title && KEEP.test(i.json.title) && !DROP.test(i.json.title));\nreturn kept;"
       }
     },
     {
@@ -329,7 +333,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2640,
+        3080,
         120
       ],
       "notes": "Remembers scored job ids for 30 days in workflow static data (saved on scheduled and CLI runs). Delete and re-import the workflow to reset it.",
@@ -343,13 +347,14 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2860,
+        3300,
         120
       ],
       "notes": "Many jobs per Gemini request to stay inside the free-tier daily request limit.",
       "parameters": {
-        "jsCode": "// Group jobs into batches; one Gemini request per batch.\nconst BATCH = 25;\nconst MAX_DESC = 1500; // characters per job sent to the model\nconst jobs = $input.all().map(i => i.json);\nconst out = [];\nfor (let k = 0; k < jobs.length; k += BATCH) {\n  const slice = jobs.slice(k, k + BATCH);\n  out.push({ json: {\n    batch: out.length + 1,\n    jobs: slice,\n    // Short ids (1..n) per batch: the model copies these reliably, unlike long source ids.\n    modelInput: slice.map((j, idx) => ({ id: String(idx + 1), market: j.market, title: j.title, company: j.company,\n      location: j.location, remote: j.remote, salary: j.salary,\n      description: (j.description || '').slice(0, MAX_DESC) })),\n  } });\n}\nreturn out;"
-      }
+        "jsCode": "// Group jobs into batches; one Gemini request per batch.\nconst BATCH = 25;\nconst MAX_DESC = 1500; // characters per job sent to the model\nconst jobs = $input.all().map(i => i.json).filter(j => j.id);\nconst out = [];\nfor (let k = 0; k < jobs.length; k += BATCH) {\n  const slice = jobs.slice(k, k + BATCH);\n  out.push({ json: {\n    batch: out.length + 1,\n    jobs: slice,\n    // Short ids (1..n) per batch: the model copies these reliably, unlike long source ids.\n    modelInput: slice.map((j, idx) => ({ id: String(idx + 1), market: j.market, title: j.title, company: j.company,\n      location: j.location, remote: j.remote, salary: j.salary,\n      description: (j.description || '').slice(0, MAX_DESC) })),\n  } });\n}\nreturn out;"
+      },
+      "alwaysOutputData": true
     },
     {
       "id": "s4",
@@ -357,7 +362,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3080,
+        3740,
         120
       ],
       "notes": "Gemini free tier. Key comes from the 'Gemini' Header Auth credential (x-goog-api-key), never from this file.",
@@ -395,12 +400,138 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3300,
+        3960,
         120
       ],
       "notes": "Joins scores back to jobs, ranks them, and remembers the ids as seen.",
       "parameters": {
         "jsCode": "// One item per job with score, reason and flags, best first.\nconst batches = $('Make batches').all();\nconst store = $getWorkflowStaticData('global');\nconst seen = store.seen || {};\nconst today = new Date().toISOString().slice(0, 10);\nconst out = [];\n$input.all().forEach((item, i) => {\n  const jobs = batches[i].json.jobs;\n  let scores = [];\n  try {\n    const text = item.json.candidates[0].content.parts[0].text;\n    scores = JSON.parse(text).scores || [];\n  } catch (e) { /* batch failed: jobs stay unscored */ }\n  const byId = Object.fromEntries(scores.map(s => [String(s.id), s]));\n  jobs.forEach((job, idx) => {\n    const s = byId[String(idx + 1)];\n    out.push({ json: { ...job,\n      score: s ? Number(s.score) : null,\n      reason: s ? s.reason : 'not scored (model error)',\n      flags: s ? (s.flags || []) : ['unscored'],\n      usage_tokens: item.json.usageMetadata?.totalTokenCount ?? null } });\n    if (s) seen[job.id] = today;\n  });\n});\n// forget ids older than 30 days\nconst cutoff = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);\nfor (const [id, d] of Object.entries(seen)) if (d < cutoff) delete seen[id];\nstore.seen = seen;\nout.sort((a, b) => (b.json.score ?? -1) - (a.json.score ?? -1));\nreturn out;"
+      }
+    },
+    {
+      "id": "t0",
+      "name": "Daily 07:30",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        -120
+      ],
+      "notes": "Runs every day at 07:30 Berlin time (container TZ). Laptop and Docker must be on.",
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 7,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t1",
+      "name": "Read chat id",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        120
+      ],
+      "notes": "profile/telegram-chat-id.txt is git-ignored. It holds only the Telegram chat id.",
+      "parameters": {
+        "fileSelector": "/home/node/jobpilot/profile/telegram-chat-id.txt",
+        "options": {}
+      }
+    },
+    {
+      "id": "t2",
+      "name": "Chat id",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        120
+      ],
+      "parameters": {
+        "operation": "text",
+        "options": {}
+      }
+    },
+    {
+      "id": "t3",
+      "name": "Has jobs?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3520,
+        120
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "h1",
+              "leftValue": "={{ ($json.jobs || []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "t4",
+      "name": "Build digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4180,
+        240
+      ],
+      "notes": "Top 5 always, plus any other job scoring 70+, up to 10. London jobs carry the Adzuna attribution required by its terms.",
+      "parameters": {
+        "jsCode": "// One Telegram message (HTML) with the best new jobs and run stats.\nconst TOP_ALWAYS = 5, MAX_JOBS = 10, GOOD = 70;\nconst safe = name => { try { return $(name).all().map(i => i.json); } catch (e) { return null; } };\nconst esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst scored = (safe('Parse scores') || []).filter(j => j.id);\nconst de = (safe('Map to job schema') || []).filter(j => j.id).length;\nconst uk = (safe('Map UK to job schema') || []).filter(j => j.id).length;\nconst failed = [];\nif ((safe('BA search') || []).some(j => j.error) || !de) failed.push('Bundesagentur');\nif ((safe('Adzuna search') || []).some(j => j.error) || !uk) failed.push('Adzuna');\nconst unscored = scored.filter(j => j.score == null).length;\n\nconst ranked = scored.filter(j => j.score != null);\nconst picks = ranked.filter((j, i) => i < TOP_ALWAYS || j.score >= GOOD).slice(0, MAX_JOBS);\n\nconst day = new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Berlin' });\nconst lines = [`<b>JobPilot · ${esc(day)}</b>`,\n  `${de} DE + ${uk} London jobs fetched · ${scored.length} new scored · ${ranked.filter(j => j.score >= GOOD).length} at ${GOOD}+`];\nif (failed.length) lines.push(`⚠️ No jobs from: ${failed.join(', ')} (source failed or returned nothing)`);\nif (unscored) lines.push(`⚠️ ${unscored} job(s) not scored (model error)`);\nlines.push('');\nif (!picks.length) {\n  lines.push('No new PM jobs today.');\n} else {\n  picks.forEach((j, n) => {\n    const where = [j.company, j.location].filter(Boolean).map(esc).join(' · ');\n    const via = j.attribution === 'Adzuna' ? ' · via <a href=\"https://www.adzuna.co.uk\">Adzuna</a>' : '';\n    lines.push(`${n + 1}. <b>${j.score}</b> · <a href=\"${esc(j.link)}\">${esc(j.title)}</a>`);\n    lines.push(`${where} · ${j.market}${via}`);\n    lines.push(`<i>${esc(j.reason)}</i>`);\n    lines.push('');\n  });\n}\nlet text = lines.join('\\n').trim();\nif (text.length > 4000) text = text.slice(0, 3990) + '\\n…';   // Telegram limit is 4096\nreturn [{ json: { text, picks: picks.map(j => ({ id: j.id, score: j.score, title: j.title })) } }];"
+      }
+    },
+    {
+      "id": "t5",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4400,
+        240
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "h8vQhRxK0LN8dNzv",
+          "name": "Telegram account"
+        }
+      },
+      "notes": "Bot token in the 'Telegram account' credential; chat id from the git-ignored file.",
+      "parameters": {
+        "chatId": "={{ $('Chat id').first().json.data.trim() }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
       }
     }
   ],
@@ -541,12 +672,7 @@
       "main": [
         [
           {
-            "node": "DE search terms",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "UK search terms",
+            "node": "Read chat id",
             "type": "main",
             "index": 0
           }
@@ -590,7 +716,7 @@
       "main": [
         [
           {
-            "node": "Gemini score",
+            "node": "Has jobs?",
             "type": "main",
             "index": 0
           }
@@ -602,6 +728,84 @@
         [
           {
             "node": "Parse scores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily 07:30": {
+      "main": [
+        [
+          {
+            "node": "Read profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read chat id": {
+      "main": [
+        [
+          {
+            "node": "Chat id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat id": {
+      "main": [
+        [
+          {
+            "node": "DE search terms",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "UK search terms",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has jobs?": {
+      "main": [
+        [
+          {
+            "node": "Gemini score",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse scores": {
+      "main": [
+        [
+          {
+            "node": "Build digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build digest": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
             "type": "main",
             "index": 0
           }

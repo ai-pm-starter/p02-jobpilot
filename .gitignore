@@ -9,3 +9,4 @@ data/raw/
 
 # JobPilot: real profile stays local (only profile.example.md is committed)
 profile/profile.md
+profile/telegram-chat-id.txt

@@ -37,6 +37,9 @@ docker compose down         # stop; workflows and credentials are kept
 
 - **Data:** workflows, credentials and n8n's encryption key live in the Docker volume `p02-jobpilot_n8n_data`, never in the repo. `docker compose down -v` deletes them.
 - **Restarts:** the container restarts by itself after Docker or the laptop restarts (`restart: unless-stopped`). For a daily digest, turn on *Start Docker Desktop when you sign in* in Docker Desktop settings.
+- **Daily digest:** the workflow is published with a schedule trigger at **07:30 Berlin time**. It only runs if the laptop is awake and Docker is running then; a missed day is not caught up. Optional: `sudo pmset repeat wakeorpoweron MTWRFSU 07:25:00` wakes a Mac before the run.
+- **Local files (git-ignored):** `profile/profile.md` (anonymised profile, the only candidate text sent to Gemini) and `profile/telegram-chat-id.txt` (your Telegram chat id). Copy `profile/profile.example.md` to start.
+- **Credentials in n8n:** Adzuna (Custom Auth), Gemini (Header Auth, `x-goog-api-key`), Telegram (bot token from @BotFather).
 - **Only local:** n8n listens on `127.0.0.1:5678`, so nothing outside this laptop can reach it.
 - **Secrets:** API keys and the Telegram bot token go in n8n credentials, never in workflow JSON or git.
 - **Workflow file:** `workflows/` is mounted at `/home/node/workflows` for exports (P2-09).

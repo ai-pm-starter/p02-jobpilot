@@ -97,3 +97,18 @@ All jobs → Title pre-filter → Drop already seen → Make batches → Gemini 
 - **Most common flags:** `german_required` 49, `visa_unclear` 45, `location_mismatch` 37, `not_pm` 22. Most German ads ask for fluent German, so with this profile the strong matches are mostly London roles plus a few English-speaking ones in Germany (e.g. Munich, Berlin).
 - **Top 3:** Senior PM Data (London, 92), AI Product Owner (Munich, 88), Senior PM B2B SaaS (London, 88).
 - **Bug found and fixed:** the model shortened one long Bundesagentur id (`…-S` dropped), so that job came back unscored. Batches now use ids 1..n, which the model copies reliably.
+
+## Digest (P2-06)
+
+```
+Daily 07:30 → … → Make batches → Has jobs? ─yes→ Gemini score → Parse scores → Build digest → Send to Telegram
+                                           └─no──────────────────────────────→ Build digest
+```
+
+- **Trigger:** schedule trigger at 07:30 Berlin time. The workflow is published (n8n 2.x `publish:workflow`). A missed run (laptop asleep or off) is not caught up.
+- **Content:** one Telegram message (HTML) with the **top 5 always**, plus any other job scoring **70+**, up to 10. Each job shows the score, a linked title, company · location · market, and the model's reason. Link previews are off.
+- **Attribution:** London jobs show "via Adzuna" linked to adzuna.co.uk (Adzuna terms).
+- **Header line:** date, jobs fetched per market, new jobs scored, and how many scored 70+.
+- **Bad days are visible, not silent:** "No new PM jobs today" when nothing new came in. A ⚠️ line names any source that failed or returned nothing. A ⚠️ line counts jobs the model failed to score. Empty sources and failed calls pass an empty result on (n8n `alwaysOutputData` / continue on error), so the message is still sent.
+- **Secrets and personal data:** bot token in the n8n Telegram credential. Chat id in `profile/telegram-chat-id.txt` (git-ignored, read-only mount). Neither is in the workflow JSON.
+- **Tested Nov 24, 2026:** a scheduled production run (trigger temporarily set 5 minutes ahead) delivered the digest to Telegram. The PM confirmed receipt. One-off command-line runs (`n8n execute`) proved unreliable for the full workflow because they compete with the running instance's task runner, so tests now go through the schedule.
