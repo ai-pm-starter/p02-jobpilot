@@ -1,12 +1,12 @@
 # AI design
 
 - **Complexity level:** chain. A fixed n8n workflow: fetch → de-duplicate → score → send. No agent.
-- **Model(s) and why:** Gemini, free tier (decided in P2-05).
+- **Model(s) and why:** `gemini-3.6-flash`, free tier. It is the same model as P1, it's fast enough (about 15–20 s for 25 jobs), and it costs €0. ADR in P2-08.
 - **Prompt(s):** `prompts/v1-fit-score.md` (P2-05)
 - **Tools the model can call:** none. The model only scores text it is given.
-- **Guardrails:** the model gets an anonymised profile and job ads only. It can't act or send anything; n8n decides what goes to Telegram.
+- **Guardrails:** the model gets an anonymised profile and job ads only. It can't act or send anything; n8n decides what goes to Telegram. The prompt tells it to ignore instructions inside job ads. Temperature is 0 and the output must be JSON.
 - **Human-in-the-loop:** the PM reads the digest and decides whether to apply.
-- **Failure modes:** a bad score means a good job ranks low or a poor one ranks high. This is measured in the P2-07 eval (precision@5).
+- **Failure modes:** a bad score means a good job ranks low or a poor one ranks high. This is measured in the P2-07 eval (precision@5). If a batch fails, its jobs show as unscored (score null, flag `unscored`) instead of silently disappearing.
 - **Privacy:** what leaves the laptop: search terms to the job APIs; job ads plus the anonymised profile to Gemini; the digest to Telegram. The CV never leaves the laptop.
 
 ## Data sources
@@ -73,5 +73,27 @@ Every source maps to the same fields (node *Map to job schema*), so scoring and 
 | `link`, `external_link` | public BA page or Adzuna page; employer page if given | |
 | `attribution` | `Adzuna` or absent | must be shown next to the job in the digest |
 
-## Open questions for P2-05
-- **Gemini quota vs volume:** about 107 jobs a day (80 DE + 27 UK), but on Nov 15 the free tier ran out after roughly 20–25 requests a day. Scoring one job per request won't fit. Options: score many jobs per request, and/or drop clear non-PM titles first with a cheap rule.
+## Scoring (P2-05)
+
+```
+All jobs → Title pre-filter → Drop already seen → Make batches → Gemini score → Parse scores
+```
+
+| Step | What it does | Why |
+|---|---|---|
+| Read profile / prompt | Reads `profile/profile.md` and `prompts/v1-fit-score.md` from read-only mounts. File nodes can only read `/home/node/jobpilot` | Profile stays out of git and out of the workflow JSON. Prompt is versioned |
+| Title pre-filter | Keeps titles with "product" or "Produkt". Drops marketing, training, control, approval, Produktion, sales (whole word), Vertrieb, designer, Konstrukteur, quality, internships and apprenticeships | Saves quota: 107 → 73 jobs on Nov 24. Borderline titles go to the model |
+| Drop already seen | Skips job ids scored in the last 30 days (workflow static data) | The same job isn't scored or sent twice |
+| Make batches | 25 jobs per request, description cut to 1,500 characters, **short ids 1..n per batch** | The free tier ran out after roughly 20–25 requests a day on Nov 15. This needs about 3 requests a day |
+| Gemini score | `generateContent`, JSON output, temperature 0, 5 s between batches, 3 tries | |
+| Parse scores | Maps scores back by batch position, sorts best first, records ids as seen | |
+
+**Profile:** `profile/profile.md` (git-ignored) is the only candidate text sent to Gemini. It has no name, contact details, employer or school names, or exact identifying figures. `profile/profile.example.md` shows the format. The PM confirmed the target roles, languages, work rights and locations on Nov 24.
+
+**Prompt v1** (`prompts/v1-fit-score.md`): weighs role first, then skills and domain, then constraints. Hard caps: not PM max 20, German as working language max 35, junior/intern max 40, location mismatch max 40. Returns score, a reason of up to 20 words, and flags (`german_required`, `not_pm`, `too_junior`, `too_senior`, `location_mismatch`, `visa_unclear`, `ai_product`, `short_description`).
+
+**First run (Nov 24, 2026):** 75 jobs in 3 requests: about 12k input and about 1.7k output tokens per batch of 25, 55 s in total.
+- **Scores:** 10 strong (85+), 4 good (70–84), 7 partial (50–69), 53 poor (<50).
+- **Most common flags:** `german_required` 49, `visa_unclear` 45, `location_mismatch` 37, `not_pm` 22. Most German ads ask for fluent German, so with this profile the strong matches are mostly London roles plus a few English-speaking ones in Germany (e.g. Munich, Berlin).
+- **Top 3:** Senior PM Data (London, 92), AI Product Owner (Munich, 88), Senior PM B2B SaaS (London, 88).
+- **Bug found and fixed:** the model shortened one long Bundesagentur id (`…-S` dropped), so that job came back unscored. Batches now use ids 1..n, which the model copies reliably.

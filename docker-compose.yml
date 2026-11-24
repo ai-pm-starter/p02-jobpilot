@@ -12,9 +12,12 @@ services:
       - TZ=Europe/Berlin
       - N8N_DIAGNOSTICS_ENABLED=false       # no telemetry
       - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+      - N8N_RESTRICT_FILE_ACCESS_TO=/home/node/jobpilot   # file nodes may only read prompt + profile
     volumes:
       - n8n_data:/home/node/.n8n            # workflows, credentials, encryption key: outside the repo
       - ./workflows:/home/node/workflows    # exported workflow JSON (P2-09) lands in the repo
+      - ./prompts:/home/node/jobpilot/prompts:ro   # scoring prompt, versioned in git
+      - ./profile:/home/node/jobpilot/profile:ro   # profile.md is git-ignored, read-only here
 
 volumes:
   n8n_data:

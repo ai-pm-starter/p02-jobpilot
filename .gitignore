@@ -6,3 +6,6 @@ __pycache__/
 node_modules/
 data/raw/
 *.ipynb_checkpoints
+
+# JobPilot: real profile stays local (only profile.example.md is committed)
+profile/profile.md

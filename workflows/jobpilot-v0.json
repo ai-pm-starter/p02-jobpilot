@@ -24,7 +24,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        220,
+        1100,
         0
       ],
       "notes": "One item per search term. Change terms here; filters are in 'BA search'.",
@@ -38,7 +38,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        440,
+        1320,
         0
       ],
       "notes": "Unofficial public API (github.com/bundesAPI/jobsuche-api). X-API-Key is the public client id, not a secret.",
@@ -94,7 +94,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        660,
+        1540,
         0
       ],
       "parameters": {
@@ -107,7 +107,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        880,
+        1760,
         0
       ],
       "notes": "Full description. v4 is the details version that still answers; v6 details returns 403.",
@@ -139,7 +139,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1100,
+        1980,
         0
       ],
       "notes": "Common shape shared with the London source (P2-04).",
@@ -153,7 +153,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        220,
+        1100,
         240
       ],
       "notes": "One item per title phrase. Filters are in 'Adzuna search'.",
@@ -167,7 +167,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        440,
+        1320,
         240
       ],
       "notes": "Adzuna free tier, personal job search. app_id/app_key come from the 'Adzuna' Custom Auth credential, never from this file. Attribution: every London job shown must say 'Adzuna' linked to adzuna.co.uk.",
@@ -231,7 +231,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        660,
+        1540,
         240
       ],
       "notes": "Flatten, de-duplicate by Adzuna id, map to the common job shape.",
@@ -245,11 +245,163 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        1320,
+        2200,
         120
       ],
       "notes": "DE + UK jobs in one list, ready for scoring (P2-05).",
       "parameters": {}
+    },
+    {
+      "id": "f1",
+      "name": "Read profile",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        220,
+        120
+      ],
+      "notes": "profile/profile.md is git-ignored and mounted read-only. It is the only candidate text sent to Gemini.",
+      "parameters": {
+        "fileSelector": "/home/node/jobpilot/profile/profile.md",
+        "options": {}
+      }
+    },
+    {
+      "id": "f2",
+      "name": "Profile text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        440,
+        120
+      ],
+      "parameters": {
+        "operation": "text",
+        "options": {}
+      }
+    },
+    {
+      "id": "f3",
+      "name": "Read prompt",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        660,
+        120
+      ],
+      "notes": "Scoring prompt, versioned in git (prompts/).",
+      "parameters": {
+        "fileSelector": "/home/node/jobpilot/prompts/v1-fit-score.md",
+        "options": {}
+      }
+    },
+    {
+      "id": "f4",
+      "name": "Prompt text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        880,
+        120
+      ],
+      "parameters": {
+        "operation": "text",
+        "options": {}
+      }
+    },
+    {
+      "id": "s1",
+      "name": "Title pre-filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        120
+      ],
+      "notes": "Cheap rule before the model: keep titles that name a product role. Saves Gemini quota.",
+      "parameters": {
+        "jsCode": "// Keep only titles that look like product roles; the rest never reach Gemini.\n// Kept: product manager/owner/lead/head, Produktmanager(in), Produktverantwortliche(r), PO.\n// Dropped: titles without 'product'/'produkt', plus clear non-PM product jobs.\nconst KEEP = /(product|produkt)/i;\nconst DROP = /(marketing|trainer|training|control|approval|produktion|\\bsales\\b|vertrieb|designer|konstruk|qualit|praktik|werkstudent|intern\\b|azubi|ausbildung)/i;\nconst kept = $input.all().filter(i => KEEP.test(i.json.title) && !DROP.test(i.json.title));\nreturn kept;"
+      }
+    },
+    {
+      "id": "s2",
+      "name": "Drop already seen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        120
+      ],
+      "notes": "Remembers scored job ids for 30 days in workflow static data (saved on scheduled and CLI runs). Delete and re-import the workflow to reset it.",
+      "parameters": {
+        "jsCode": "// Skip jobs scored in an earlier run (ids kept for 30 days).\nconst store = $getWorkflowStaticData('global');\nconst seen = store.seen || {};\nreturn $input.all().filter(i => !seen[i.json.id]);"
+      }
+    },
+    {
+      "id": "s3",
+      "name": "Make batches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        120
+      ],
+      "notes": "Many jobs per Gemini request to stay inside the free-tier daily request limit.",
+      "parameters": {
+        "jsCode": "// Group jobs into batches; one Gemini request per batch.\nconst BATCH = 25;\nconst MAX_DESC = 1500; // characters per job sent to the model\nconst jobs = $input.all().map(i => i.json);\nconst out = [];\nfor (let k = 0; k < jobs.length; k += BATCH) {\n  const slice = jobs.slice(k, k + BATCH);\n  out.push({ json: {\n    batch: out.length + 1,\n    jobs: slice,\n    // Short ids (1..n) per batch: the model copies these reliably, unlike long source ids.\n    modelInput: slice.map((j, idx) => ({ id: String(idx + 1), market: j.market, title: j.title, company: j.company,\n      location: j.location, remote: j.remote, salary: j.salary,\n      description: (j.description || '').slice(0, MAX_DESC) })),\n  } });\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "s4",
+      "name": "Gemini score",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        120
+      ],
+      "notes": "Gemini free tier. Key comes from the 'Gemini' Header Auth credential (x-goog-api-key), never from this file.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "tTIRDBeb8Untc245",
+          "name": "Header Auth account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: $('Prompt text').first().json.data + '\\n\\n## Candidate profile\\n' + $('Profile text').first().json.data + '\\n\\n## Jobs (JSON)\\n' + JSON.stringify($json.modelInput) }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0 } }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 5000
+            }
+          },
+          "timeout": 180000
+        }
+      }
+    },
+    {
+      "id": "s5",
+      "name": "Parse scores",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        120
+      ],
+      "notes": "Joins scores back to jobs, ranks them, and remembers the ids as seen.",
+      "parameters": {
+        "jsCode": "// One item per job with score, reason and flags, best first.\nconst batches = $('Make batches').all();\nconst store = $getWorkflowStaticData('global');\nconst seen = store.seen || {};\nconst today = new Date().toISOString().slice(0, 10);\nconst out = [];\n$input.all().forEach((item, i) => {\n  const jobs = batches[i].json.jobs;\n  let scores = [];\n  try {\n    const text = item.json.candidates[0].content.parts[0].text;\n    scores = JSON.parse(text).scores || [];\n  } catch (e) { /* batch failed: jobs stay unscored */ }\n  const byId = Object.fromEntries(scores.map(s => [String(s.id), s]));\n  jobs.forEach((job, idx) => {\n    const s = byId[String(idx + 1)];\n    out.push({ json: { ...job,\n      score: s ? Number(s.score) : null,\n      reason: s ? s.reason : 'not scored (model error)',\n      flags: s ? (s.flags || []) : ['unscored'],\n      usage_tokens: item.json.usageMetadata?.totalTokenCount ?? null } });\n    if (s) seen[job.id] = today;\n  });\n});\n// forget ids older than 30 days\nconst cutoff = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);\nfor (const [id, d] of Object.entries(seen)) if (d < cutoff) delete seen[id];\nstore.seen = seen;\nout.sort((a, b) => (b.json.score ?? -1) - (a.json.score ?? -1));\nreturn out;"
+      }
     }
   ],
   "connections": {
@@ -257,12 +409,7 @@
       "main": [
         [
           {
-            "node": "DE search terms",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "UK search terms",
+            "node": "Read profile",
             "type": "main",
             "index": 0
           }
@@ -353,6 +500,110 @@
             "node": "All jobs",
             "type": "main",
             "index": 1
+          }
+        ]
+      ]
+    },
+    "Read profile": {
+      "main": [
+        [
+          {
+            "node": "Profile text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Profile text": {
+      "main": [
+        [
+          {
+            "node": "Read prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read prompt": {
+      "main": [
+        [
+          {
+            "node": "Prompt text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prompt text": {
+      "main": [
+        [
+          {
+            "node": "DE search terms",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "UK search terms",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "All jobs": {
+      "main": [
+        [
+          {
+            "node": "Title pre-filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Title pre-filter": {
+      "main": [
+        [
+          {
+            "node": "Drop already seen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Drop already seen": {
+      "main": [
+        [
+          {
+            "node": "Make batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Make batches": {
+      "main": [
+        [
+          {
+            "node": "Gemini score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini score": {
+      "main": [
+        [
+          {
+            "node": "Parse scores",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
