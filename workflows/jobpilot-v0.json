@@ -1,0 +1,102 @@
+{
+  "id": "JPHtiT5bdIwZIFpD",
+  "name": "JobPilot v0",
+  "active": false,
+  "settings": { "executionOrder": "v1", "timezone": "Europe/Berlin" },
+  "nodes": [
+    {
+      "id": "a1",
+      "name": "Manual trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {}
+    },
+    {
+      "id": "a2",
+      "name": "DE search terms",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "notes": "One item per search term. Change terms here; filters are in 'BA search'.",
+      "parameters": {
+        "jsCode": "// PM search terms for the Bundesagentur Jobsuche API (P2-03).\n// 'Produktmanagerin' returns the same jobs as 'Produktmanager', so it is left out.\nconst terms = ['Product Manager', 'Produktmanager', 'Product Owner', 'Head of Product'];\nreturn terms.map(was => ({ json: { was } }));"
+      }
+    },
+    {
+      "id": "a3",
+      "name": "BA search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0],
+      "notes": "Unofficial public API (github.com/bundesAPI/jobsuche-api). X-API-Key is the public client id, not a secret.",
+      "parameters": {
+        "url": "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v6/jobs",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "was", "value": "={{ $json.was }}" },
+            { "name": "angebotsart", "value": "1" },
+            { "name": "veroeffentlichtseit", "value": "1" },
+            { "name": "size", "value": "100" },
+            { "name": "page", "value": "1" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-API-Key", "value": "jobboerse-jobsuche" }]
+        },
+        "options": {
+          "batching": { "batch": { "batchSize": 1, "batchInterval": 1000 } }
+        }
+      }
+    },
+    {
+      "id": "a4",
+      "name": "Flatten + de-duplicate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "parameters": {
+        "jsCode": "// One item per unique job (by referenznummer) across all search terms.\nconst seen = new Set();\nconst out = [];\nfor (const item of $input.all()) {\n  for (const job of item.json.ergebnisliste || []) {\n    const ref = job.referenznummer;\n    if (!ref || seen.has(ref)) continue;\n    seen.add(ref);\n    out.push({ json: { ...job, detailsKey: Buffer.from(ref).toString('base64') } });\n  }\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "a5",
+      "name": "BA job details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0],
+      "notes": "Full description. v4 is the details version that still answers; v6 details returns 403.",
+      "parameters": {
+        "url": "=https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobdetails/{{ $json.detailsKey }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-API-Key", "value": "jobboerse-jobsuche" }]
+        },
+        "options": {
+          "batching": { "batch": { "batchSize": 5, "batchInterval": 1000 } }
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "a6",
+      "name": "Map to job schema",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0],
+      "notes": "Common shape shared with the London source (P2-04).",
+      "parameters": {
+        "jsCode": "// Map each Bundesagentur job to JobPilot's common job shape.\nconst MAX_DESC = 6000; // characters sent on to scoring\nconst list = $('Flatten + de-duplicate').all();\nreturn $input.all().map((item, i) => {\n  const s = list[i].json;            // search result (always there)\n  const d = item.json || {};         // details (may be an error)\n  const loc = (s.stellenlokationen || []).map(l => l.adresse?.ort).filter(Boolean);\n  const desc = (d.stellenangebotsBeschreibung || '').replace(/\\*\\*/g, '').replace(/\\n{3,}/g, '\\n\\n').trim();\n  const salary = s.gehaltsspanneVon ? `${s.gehaltsspanneVon}–${s.gehaltsspanneBis || ''} (${s.artDerVerguetung || ''})` : null;\n  return { json: {\n    id: `ba:${s.referenznummer}`,\n    source: 'bundesagentur',\n    market: 'DE',\n    title: (s.stellenangebotsTitel || '').trim(),\n    company: s.firma || null,\n    location: [...new Set(loc)].join(', ') || null,\n    remote: s.homeofficemoeglich ? (s.homeofficetyp || 'possible') : 'no',\n    published: s.datumErsteVeroeffentlichung || null,\n    salary,\n    description: desc.slice(0, MAX_DESC),\n    description_missing: !desc,\n    link: `https://www.arbeitsagentur.de/jobsuche/jobdetail/${s.referenznummer}`,\n    external_link: s.externeURL || null,\n  } };\n});"
+      }
+    }
+  ],
+  "connections": {
+    "Manual trigger": { "main": [[{ "node": "DE search terms", "type": "main", "index": 0 }]] },
+    "DE search terms": { "main": [[{ "node": "BA search", "type": "main", "index": 0 }]] },
+    "BA search": { "main": [[{ "node": "Flatten + de-duplicate", "type": "main", "index": 0 }]] },
+    "Flatten + de-duplicate": { "main": [[{ "node": "BA job details", "type": "main", "index": 0 }]] },
+    "BA job details": { "main": [[{ "node": "Map to job schema", "type": "main", "index": 0 }]] }
+  }
+}
