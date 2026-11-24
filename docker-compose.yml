@@ -1,0 +1,20 @@
+# JobPilot v0: n8n running locally (P2-02).
+# Start: docker compose up -d   ·   Open: http://localhost:5678   ·   Stop: docker compose down
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.49.5   # pinned; bump on purpose, not by accident
+    container_name: jobpilot-n8n
+    restart: unless-stopped                 # comes back after a Docker or laptop restart
+    ports:
+      - "127.0.0.1:5678:5678"               # only reachable from this laptop
+    environment:
+      - GENERIC_TIMEZONE=Europe/Berlin      # schedule trigger runs on Berlin time
+      - TZ=Europe/Berlin
+      - N8N_DIAGNOSTICS_ENABLED=false       # no telemetry
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+    volumes:
+      - n8n_data:/home/node/.n8n            # workflows, credentials, encryption key: outside the repo
+      - ./workflows:/home/node/workflows    # exported workflow JSON (P2-09) lands in the repo
+
+volumes:
+  n8n_data:
