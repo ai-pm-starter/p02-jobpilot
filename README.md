@@ -1,8 +1,8 @@
-# <Project name>
+# JobPilot v0
 
-> One sentence: who it's for and what it does.
+> A daily Telegram digest of new PM jobs in Germany and London, scored 0–100 against your profile.
 
-**Live demo:** <link> · **PM:** <name>
+**Live demo:** <link> · **PM:** Prashant
 
 ## The problem
 2–3 sentences. Who hurts, how much, why now.
