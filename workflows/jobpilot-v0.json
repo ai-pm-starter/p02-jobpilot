@@ -2,14 +2,20 @@
   "id": "JPHtiT5bdIwZIFpD",
   "name": "JobPilot v0",
   "active": false,
-  "settings": { "executionOrder": "v1", "timezone": "Europe/Berlin" },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Berlin"
+  },
   "nodes": [
     {
       "id": "a1",
       "name": "Manual trigger",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [0, 0],
+      "position": [
+        0,
+        0
+      ],
       "parameters": {}
     },
     {
@@ -17,7 +23,10 @@
       "name": "DE search terms",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [220, 0],
+      "position": [
+        220,
+        0
+      ],
       "notes": "One item per search term. Change terms here; filters are in 'BA search'.",
       "parameters": {
         "jsCode": "// PM search terms for the Bundesagentur Jobsuche API (P2-03).\n// 'Produktmanagerin' returns the same jobs as 'Produktmanager', so it is left out.\nconst terms = ['Product Manager', 'Produktmanager', 'Product Owner', 'Head of Product'];\nreturn terms.map(was => ({ json: { was } }));"
@@ -28,26 +37,54 @@
       "name": "BA search",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [440, 0],
+      "position": [
+        440,
+        0
+      ],
       "notes": "Unofficial public API (github.com/bundesAPI/jobsuche-api). X-API-Key is the public client id, not a secret.",
       "parameters": {
         "url": "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v6/jobs",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "was", "value": "={{ $json.was }}" },
-            { "name": "angebotsart", "value": "1" },
-            { "name": "veroeffentlichtseit", "value": "1" },
-            { "name": "size", "value": "100" },
-            { "name": "page", "value": "1" }
+            {
+              "name": "was",
+              "value": "={{ $json.was }}"
+            },
+            {
+              "name": "angebotsart",
+              "value": "1"
+            },
+            {
+              "name": "veroeffentlichtseit",
+              "value": "1"
+            },
+            {
+              "name": "size",
+              "value": "100"
+            },
+            {
+              "name": "page",
+              "value": "1"
+            }
           ]
         },
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "X-API-Key", "value": "jobboerse-jobsuche" }]
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "jobboerse-jobsuche"
+            }
+          ]
         },
         "options": {
-          "batching": { "batch": { "batchSize": 1, "batchInterval": 1000 } }
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1000
+            }
+          }
         }
       }
     },
@@ -56,7 +93,10 @@
       "name": "Flatten + de-duplicate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [660, 0],
+      "position": [
+        660,
+        0
+      ],
       "parameters": {
         "jsCode": "// One item per unique job (by referenznummer) across all search terms.\nconst seen = new Set();\nconst out = [];\nfor (const item of $input.all()) {\n  for (const job of item.json.ergebnisliste || []) {\n    const ref = job.referenznummer;\n    if (!ref || seen.has(ref)) continue;\n    seen.add(ref);\n    out.push({ json: { ...job, detailsKey: Buffer.from(ref).toString('base64') } });\n  }\n}\nreturn out;"
       }
@@ -66,16 +106,29 @@
       "name": "BA job details",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [880, 0],
+      "position": [
+        880,
+        0
+      ],
       "notes": "Full description. v4 is the details version that still answers; v6 details returns 403.",
       "parameters": {
         "url": "=https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobdetails/{{ $json.detailsKey }}",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "X-API-Key", "value": "jobboerse-jobsuche" }]
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "jobboerse-jobsuche"
+            }
+          ]
         },
         "options": {
-          "batching": { "batch": { "batchSize": 5, "batchInterval": 1000 } }
+          "batching": {
+            "batch": {
+              "batchSize": 5,
+              "batchInterval": 1000
+            }
+          }
         }
       },
       "onError": "continueRegularOutput"
@@ -85,18 +138,224 @@
       "name": "Map to job schema",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1100, 0],
+      "position": [
+        1100,
+        0
+      ],
       "notes": "Common shape shared with the London source (P2-04).",
       "parameters": {
         "jsCode": "// Map each Bundesagentur job to JobPilot's common job shape.\nconst MAX_DESC = 6000; // characters sent on to scoring\nconst list = $('Flatten + de-duplicate').all();\nreturn $input.all().map((item, i) => {\n  const s = list[i].json;            // search result (always there)\n  const d = item.json || {};         // details (may be an error)\n  const loc = (s.stellenlokationen || []).map(l => l.adresse?.ort).filter(Boolean);\n  const desc = (d.stellenangebotsBeschreibung || '').replace(/\\*\\*/g, '').replace(/\\n{3,}/g, '\\n\\n').trim();\n  const salary = s.gehaltsspanneVon ? `${s.gehaltsspanneVon}–${s.gehaltsspanneBis || ''} (${s.artDerVerguetung || ''})` : null;\n  return { json: {\n    id: `ba:${s.referenznummer}`,\n    source: 'bundesagentur',\n    market: 'DE',\n    title: (s.stellenangebotsTitel || '').trim(),\n    company: s.firma || null,\n    location: [...new Set(loc)].join(', ') || null,\n    remote: s.homeofficemoeglich ? (s.homeofficetyp || 'possible') : 'no',\n    published: s.datumErsteVeroeffentlichung || null,\n    salary,\n    description: desc.slice(0, MAX_DESC),\n    description_missing: !desc,\n    link: `https://www.arbeitsagentur.de/jobsuche/jobdetail/${s.referenznummer}`,\n    external_link: s.externeURL || null,\n  } };\n});"
       }
+    },
+    {
+      "id": "b2",
+      "name": "UK search terms",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        240
+      ],
+      "notes": "One item per title phrase. Filters are in 'Adzuna search'.",
+      "parameters": {
+        "jsCode": "// PM title phrases for Adzuna, London (P2-04). Matched in the job title only.\n// One page of 50 per phrase: the largest phrase returned 16 jobs a day. Add page 2 if a count nears 50.\nconst phrases = ['product manager', 'product owner', 'head of product'];\nreturn phrases.map(title_only => ({ json: { title_only, page: 1 } }));"
+      }
+    },
+    {
+      "id": "b3",
+      "name": "Adzuna search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        240
+      ],
+      "notes": "Adzuna free tier, personal job search. app_id/app_key come from the 'Adzuna' Custom Auth credential, never from this file. Attribution: every London job shown must say 'Adzuna' linked to adzuna.co.uk.",
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "odGKVGGCBvsPslkR",
+          "name": "Custom Auth account"
+        }
+      },
+      "parameters": {
+        "url": "=https://api.adzuna.com/v1/api/jobs/gb/search/{{ $json.page }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "title_only",
+              "value": "={{ $json.title_only }}"
+            },
+            {
+              "name": "where",
+              "value": "London"
+            },
+            {
+              "name": "distance",
+              "value": "25"
+            },
+            {
+              "name": "max_days_old",
+              "value": "1"
+            },
+            {
+              "name": "results_per_page",
+              "value": "50"
+            },
+            {
+              "name": "sort_by",
+              "value": "date"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1500
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "b4",
+      "name": "Map UK to job schema",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        240
+      ],
+      "notes": "Flatten, de-duplicate by Adzuna id, map to the common job shape.",
+      "parameters": {
+        "jsCode": "// One item per unique Adzuna job, in JobPilot's common job shape.\nconst seen = new Set();\nconst out = [];\nfor (const item of $input.all()) {\n  for (const j of item.json.results || []) {\n    if (!j.id || seen.has(j.id)) continue;\n    seen.add(j.id);\n    const salary = j.salary_min && !Number(j.salary_is_predicted)\n      ? `£${Math.round(j.salary_min)}–${j.salary_max ? Math.round(j.salary_max) : ''}` : null;\n    out.push({ json: {\n      id: `adzuna:${j.id}`,\n      source: 'adzuna',\n      market: 'UK',\n      title: (j.title || '').replace(/<[^>]+>/g, '').trim(),\n      company: j.company?.display_name || null,\n      location: j.location?.display_name || null,\n      remote: /remote|hybrid/i.test(`${j.title} ${j.description}`) ? 'mentioned' : 'not mentioned',\n      published: (j.created || '').slice(0, 10) || null,\n      salary,\n      description: (j.description || '').replace(/<[^>]+>/g, '').trim(), // Adzuna gives a snippet only\n      description_missing: !j.description,\n      link: j.redirect_url,\n      external_link: null,\n      attribution: 'Adzuna',\n    } });\n  }\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "c1",
+      "name": "All jobs",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1320,
+        120
+      ],
+      "notes": "DE + UK jobs in one list, ready for scoring (P2-05).",
+      "parameters": {}
     }
   ],
   "connections": {
-    "Manual trigger": { "main": [[{ "node": "DE search terms", "type": "main", "index": 0 }]] },
-    "DE search terms": { "main": [[{ "node": "BA search", "type": "main", "index": 0 }]] },
-    "BA search": { "main": [[{ "node": "Flatten + de-duplicate", "type": "main", "index": 0 }]] },
-    "Flatten + de-duplicate": { "main": [[{ "node": "BA job details", "type": "main", "index": 0 }]] },
-    "BA job details": { "main": [[{ "node": "Map to job schema", "type": "main", "index": 0 }]] }
+    "Manual trigger": {
+      "main": [
+        [
+          {
+            "node": "DE search terms",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "UK search terms",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DE search terms": {
+      "main": [
+        [
+          {
+            "node": "BA search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BA search": {
+      "main": [
+        [
+          {
+            "node": "Flatten + de-duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flatten + de-duplicate": {
+      "main": [
+        [
+          {
+            "node": "BA job details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BA job details": {
+      "main": [
+        [
+          {
+            "node": "Map to job schema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "UK search terms": {
+      "main": [
+        [
+          {
+            "node": "Adzuna search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adzuna search": {
+      "main": [
+        [
+          {
+            "node": "Map UK to job schema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map to job schema": {
+      "main": [
+        [
+          {
+            "node": "All jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map UK to job schema": {
+      "main": [
+        [
+          {
+            "node": "All jobs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
   }
 }

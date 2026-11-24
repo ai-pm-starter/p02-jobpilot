@@ -34,6 +34,30 @@ Checked Nov 24, 2026. **Unofficial:** the Bundesagentur has no official public A
 
 **First run (Nov 24, 2026):** 4 searches gave 93 results, which were 80 unique jobs, all with descriptions (about 3,700 characters on average). The run took 21 s. About a third are not PM roles (e.g. quality manager, design engineer, brand manager) because the BA search matches loosely. Scoring has to filter these out.
 
+### London: Adzuna API (P2-04)
+Checked Nov 24, 2026. Free developer key, no payment details. Personal job search is allowed by the [terms](https://developer.adzuna.com/docs/terms_of_service). Commercial use or reselling the data would need a licence.
+
+| | |
+|---|---|
+| Search | `GET https://api.adzuna.com/v1/api/jobs/gb/search/{page}` |
+| Auth | `app_id` + `app_key` query parameters, held in the n8n Custom Auth credential (`{"qs": {"app_id": …, "app_key": …}}`). The workflow file only holds the credential's id, never the keys |
+| Link for users | `redirect_url` (an Adzuna page) |
+| Politeness | 1 request every 1.5 s, 3 requests a day |
+| **Attribution** | Every London job shown must be labelled **"Adzuna"** with a link to adzuna.co.uk. Jobs carry `attribution: "Adzuna"`, and the P2-06 digest must show it |
+
+**Search terms** (node *UK search terms*): `product manager`, `product owner`, `head of product`, matched in the **title only** (`title_only`).
+
+**Filters** (node *Adzuna search*): `where=London`, `distance=25` (km), `max_days_old=1`, `results_per_page=50`, `sort_by=date`.
+
+**Why title-only:** `what_phrase` also matches the description. On the first run it returned 86 jobs, many not PM (business development, buying admin, data architect). Title-only returned 27, almost all PM or PO roles. Title-only matches the words anywhere in the title, so a few near-misses get through, such as "Product Trainer / Training Manager" and "Product Marketing Manager". Scoring handles those.
+
+**Limits:**
+- Adzuna returns only a **snippet of the description** (about 500 characters, against about 3,700 for German jobs), so London jobs are scored on less text. We don't scrape the full ads.
+- Remote/hybrid is only detected from words in the title and snippet.
+- Salary is kept only when the employer gave it, not when Adzuna predicted it.
+
+**First run (Nov 24, 2026):** 3 searches gave 27 unique London jobs. Together with Germany: **107 jobs a day** go into *All jobs*.
+
 ## Common job shape
 Every source maps to the same fields (node *Map to job schema*), so scoring and the digest don't care where a job came from:
 
@@ -42,11 +66,12 @@ Every source maps to the same fields (node *Map to job schema*), so scoring and 
 | `id` | `ba:19301-986202680-S` | source prefix + source id |
 | `source`, `market` | `bundesagentur`, `DE` | |
 | `title`, `company`, `location` | `Senior Product Manager (m/w/d)`, …, `Berlin` | |
-| `remote` | `no`, `NACH_VEREINBARUNG`, `ANGABE_IN_PROZENT` | BA values as given; normalised in P2-05 if needed |
+| `remote` | BA: `no`, `NACH_VEREINBARUNG`, `ANGABE_IN_PROZENT`; Adzuna: `mentioned`, `not mentioned` | normalised in P2-05 if needed |
 | `published` | `2026-11-24` | |
 | `salary` | `60000–80000 (JAHR)` or null | given for about 1 in 5 jobs |
 | `description` | text, max 6,000 characters | markdown bold removed |
-| `link`, `external_link` | public BA page, employer page if given | |
+| `link`, `external_link` | public BA page or Adzuna page; employer page if given | |
+| `attribution` | `Adzuna` or absent | must be shown next to the job in the digest |
 
 ## Open questions for P2-05
-- **Gemini quota vs volume:** about 80 jobs a day, but on Nov 15 the free tier ran out after roughly 20–25 requests a day. Scoring one job per request won't fit. Options: score many jobs per request, and/or drop clear non-PM titles first with a cheap rule.
+- **Gemini quota vs volume:** about 107 jobs a day (80 DE + 27 UK), but on Nov 15 the free tier ran out after roughly 20–25 requests a day. Scoring one job per request won't fit. Options: score many jobs per request, and/or drop clear non-PM titles first with a cheap rule.
