@@ -110,5 +110,6 @@ Daily 07:30 → … → Make batches → Has jobs? ─yes→ Gemini score → Pa
 - **Attribution:** London jobs show "via Adzuna" linked to adzuna.co.uk (Adzuna terms).
 - **Header line:** date, jobs fetched per market, new jobs scored, and how many scored 70+.
 - **Bad days are visible, not silent:** "No new PM jobs today" when nothing new came in. A ⚠️ line names any source that failed or returned nothing. A ⚠️ line counts jobs the model failed to score. Empty sources and failed calls pass an empty result on (n8n `alwaysOutputData` / continue on error), so the message is still sent.
+- **Eval log (P2-07):** every job sent is also appended to `evals/digest-labels.csv` (writable `./evals` mount) with an empty `relevant` column for the PM to fill in. Days with no picks write nothing.
 - **Secrets and personal data:** bot token in the n8n Telegram credential. Chat id in `profile/telegram-chat-id.txt` (git-ignored, read-only mount). Neither is in the workflow JSON.
 - **Tested Nov 24, 2026:** a scheduled production run (trigger temporarily set 5 minutes ahead) delivered the digest to Telegram. The PM confirmed receipt. One-off command-line runs (`n8n execute`) proved unreliable for the full workflow because they compete with the running instance's task runner, so tests now go through the schedule.

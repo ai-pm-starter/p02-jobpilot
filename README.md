@@ -43,3 +43,4 @@ docker compose down         # stop; workflows and credentials are kept
 - **Only local:** n8n listens on `127.0.0.1:5678`, so nothing outside this laptop can reach it.
 - **Secrets:** API keys and the Telegram bot token go in n8n credentials, never in workflow JSON or git.
 - **Workflow file:** `workflows/` is mounted at `/home/node/workflows` for exports (P2-09).
+- **Eval log:** `evals/` is mounted writable; each digest appends its jobs to `evals/digest-labels.csv` for labelling (P2-07).
