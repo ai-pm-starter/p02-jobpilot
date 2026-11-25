@@ -582,6 +582,55 @@
           "append": true
         }
       }
+    },
+    {
+      "id": "t9",
+      "name": "Scored rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        640
+      ],
+      "notes": "All jobs scored today as CSV rows, for browsing in a spreadsheet.",
+      "parameters": {
+        "jsCode": "// Every job scored today, one CSV row each, so the PM can browse them all in a spreadsheet.\nlet jobs = [];\ntry { jobs = $('Parse scores').all().map(i => i.json).filter(j => j.id); } catch (e) { return []; }   // no new jobs today\nif (!jobs.length) return [];\nconst date = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Berlin' });   // YYYY-MM-DD\nconst cell = v => { const s = String(v ?? '').replace(/[\\r\\n]+/g, ' '); return /[\",]/.test(s) ? '\"' + s.replace(/\"/g, '\"\"') + '\"' : s; };\nconst csv = jobs.map(j => [date, j.score ?? '', j.market, j.title, j.company, j.location, j.reason, (j.flags || []).join(' '), j.link, j.id]\n  .map(cell).join(',')).join('\\n') + '\\n';\nreturn [{ json: { csv, rows: jobs.length } }];"
+      }
+    },
+    {
+      "id": "t10",
+      "name": "Scored to file",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        4620,
+        640
+      ],
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "csv",
+        "options": {
+          "fileName": "scored-jobs.csv"
+        }
+      }
+    },
+    {
+      "id": "t11",
+      "name": "Append to scored-jobs.csv",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        4840,
+        640
+      ],
+      "notes": "Appends to evals/scored-jobs.csv. The header row is in git.",
+      "parameters": {
+        "operation": "write",
+        "fileName": "/home/node/jobpilot/evals/scored-jobs.csv",
+        "options": {
+          "append": true
+        }
+      }
     }
   ],
   "connections": {
@@ -862,6 +911,11 @@
             "node": "Label rows",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Scored rows",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -882,6 +936,28 @@
         [
           {
             "node": "Append to digest-labels.csv",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scored rows": {
+      "main": [
+        [
+          {
+            "node": "Scored to file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scored to file": {
+      "main": [
+        [
+          {
+            "node": "Append to scored-jobs.csv",
             "type": "main",
             "index": 0
           }
