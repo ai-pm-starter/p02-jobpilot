@@ -1,7 +1,7 @@
 # AI design
 
 - **Complexity level:** chain. A fixed n8n workflow: fetch → de-duplicate → score → send. No agent.
-- **Model(s) and why:** `gemini-3.6-flash`, free tier. It is the same model as P1, it's fast enough (about 15–20 s for 25 jobs), and it costs €0. ADR in P2-08.
+- **Model(s) and why:** `gemini-3.6-flash`, free tier. It is the same model as P1, it's fast enough (about 15–20 s for 25 jobs), and it costs €0. See [ADR-001](decisions/ADR-001-n8n-vs-python.md).
 - **Prompt(s):** `prompts/v1-fit-score.md` (P2-05)
 - **Tools the model can call:** none. The model only scores text it is given.
 - **Guardrails:** the model gets an anonymised profile and job ads only. It can't act or send anything; n8n decides what goes to Telegram. The prompt tells it to ignore instructions inside job ads. Temperature is 0 and the output must be JSON.

@@ -75,7 +75,7 @@ Full design, data sources and first-run numbers: [docs/03-ai-design.md](docs/03-
 - **Job ads are treated as data:** the prompt tells the model to ignore any instructions written inside them.
 
 ## Key product decisions
-- **n8n instead of a Python script:** visual, quick to change, and good for showing how it works. ADR in P2-08 (`docs/decisions/`).
+- **n8n instead of a Python script:** visual, quick to change, and good for showing how it works. See [ADR-001](docs/decisions/ADR-001-n8n-vs-python.md): n8n for v0, revisit for v1.
 - **Official or documented APIs only, no scraping:** that rules out LinkedIn and StepStone for v0.
 - **Adzuna for London:** free key, personal job search allowed, but only a ~500-character snippet of each ad.
 - **Title-only search for London:** cut 86 noisy results to 27 mostly real PM roles.
@@ -93,7 +93,7 @@ Each step is a GitHub issue in Sprint 2.
 | 5. Scoring | Wrote an anonymised profile and confirmed my targets (roles, cities, German level, work rights); saved a Gemini API key in n8n; wrote the scoring prompt | P2-05 |
 | 6. Digest | Created a Telegram bot with @BotFather, saved its token in n8n, got my chat ID; scheduled the workflow for 07:30 and confirmed the message arrived | P2-06 |
 | 7. Eval | Every digest now logs its jobs to `evals/digest-labels.csv`; I mark each one relevant Y/N for 5 days | P2-07 (in progress) |
-| 8. Decision record | n8n vs Python | P2-08 (next) |
+| 8. Decision record | Compared n8n with a Python script on build speed, debugging, hosting, portfolio value and the path to v1; kept n8n ([ADR-001](docs/decisions/ADR-001-n8n-vs-python.md)) | P2-08 |
 | 9. Workflow export | Workflow JSON in the repo, checked for secrets | P2-09 (next) |
 | 10. Launch | Screenshot, retro, LinkedIn post | P2-10 (next) |
 
