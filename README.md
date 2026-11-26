@@ -137,7 +137,7 @@ echo "YOUR_CHAT_ID" > profile/telegram-chat-id.txt
 1. In n8n: *Workflows → Import from file* → `workflows/jobpilot-v0.json`.
 2. Open the nodes **Adzuna search**, **Gemini score** and **Send to Telegram**, and pick your credential in each one.
 3. Click **Execute workflow** to test. A digest should arrive in Telegram within about a minute.
-4. Click **Publish** so it runs every day at 07:30 (Berlin time; change the *Daily 07:30* node if needed).
+4. Click **Publish** so it runs every day at 07:30 (UK time, set in `docker-compose.yml`; change `GENERIC_TIMEZONE` and `TZ` for another time zone).
 
 **7. Keep it running**
 - In Docker Desktop settings, turn on *Start Docker Desktop when you sign in*.

@@ -105,7 +105,7 @@ Daily 07:30 → … → Make batches → Has jobs? ─yes→ Gemini score → Pa
                                            └─no──────────────────────────────→ Build digest
 ```
 
-- **Trigger:** schedule trigger at 07:30 Berlin time. The workflow is published (n8n 2.x `publish:workflow`). A missed run (laptop asleep or off) is not caught up.
+- **Trigger:** schedule trigger at 07:30 UK time (Europe/London, matching the Mac; switched from Berlin time on Nov 26 because the Mac woke after the run). The workflow is published (n8n 2.x `publish:workflow`). A missed run (laptop asleep or off) is not caught up.
 - **Content:** one Telegram message (HTML) with the **top 5 always**, plus any other job scoring **70+**, up to 10. Each job shows the score, a linked title, company · location · market, and the model's reason. Link previews are off.
 - **Attribution:** London jobs show "via Adzuna" linked to adzuna.co.uk (Adzuna terms).
 - **Header line:** date, jobs fetched per market, new jobs scored, and how many scored 70+.

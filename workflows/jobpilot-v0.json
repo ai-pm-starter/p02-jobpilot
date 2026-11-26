@@ -4,7 +4,7 @@
   "active": false,
   "settings": {
     "executionOrder": "v1",
-    "timezone": "Europe/Berlin"
+    "timezone": "Europe/London"
   },
   "nodes": [
     {
@@ -417,7 +417,7 @@
         0,
         -120
       ],
-      "notes": "Runs every day at 07:30 Berlin time (container TZ). Laptop and Docker must be on.",
+      "notes": "Runs every day at 07:30 UK time (container TZ). Laptop and Docker must be on.",
       "parameters": {
         "rule": {
           "interval": [
@@ -505,7 +505,7 @@
       ],
       "notes": "Top 5 always, plus any other job scoring 70+, up to 10. London jobs carry the Adzuna attribution required by its terms.",
       "parameters": {
-        "jsCode": "// One Telegram message (HTML) with the best new jobs and run stats.\nconst TOP_ALWAYS = 5, MAX_JOBS = 10, GOOD = 70;\nconst safe = name => { try { return $(name).all().map(i => i.json); } catch (e) { return null; } };\nconst esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst scored = (safe('Parse scores') || []).filter(j => j.id);\nconst de = (safe('Map to job schema') || []).filter(j => j.id).length;\nconst uk = (safe('Map UK to job schema') || []).filter(j => j.id).length;\nconst failed = [];\nif ((safe('BA search') || []).some(j => j.error) || !de) failed.push('Bundesagentur');\nif ((safe('Adzuna search') || []).some(j => j.error) || !uk) failed.push('Adzuna');\nconst unscored = scored.filter(j => j.score == null).length;\n\nconst ranked = scored.filter(j => j.score != null);\nconst picks = ranked.filter((j, i) => i < TOP_ALWAYS || j.score >= GOOD).slice(0, MAX_JOBS);\n\nconst day = new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Berlin' });\nconst lines = [`<b>JobPilot · ${esc(day)}</b>`,\n  `${de} DE + ${uk} London jobs fetched · ${scored.length} new scored · ${ranked.filter(j => j.score >= GOOD).length} at ${GOOD}+`];\nif (failed.length) lines.push(`⚠️ No jobs from: ${failed.join(', ')} (source failed or returned nothing)`);\nif (unscored) lines.push(`⚠️ ${unscored} job(s) not scored (model error)`);\nlines.push('');\nif (!picks.length) {\n  lines.push('No new PM jobs today.');\n} else {\n  picks.forEach((j, n) => {\n    const where = [j.company, j.location].filter(Boolean).map(esc).join(' · ');\n    const via = j.attribution === 'Adzuna' ? ' · via <a href=\"https://www.adzuna.co.uk\">Adzuna</a>' : '';\n    lines.push(`${n + 1}. <b>${j.score}</b> · <a href=\"${esc(j.link)}\">${esc(j.title)}</a>`);\n    lines.push(`${where} · ${j.market}${via}`);\n    lines.push(`<i>${esc(j.reason)}</i>`);\n    lines.push('');\n  });\n}\nlet text = lines.join('\\n').trim();\nif (text.length > 4000) text = text.slice(0, 3990) + '\\n…';   // Telegram limit is 4096\nreturn [{ json: { text, picks: picks.map(j => ({ id: j.id, score: j.score, market: j.market, title: j.title, company: j.company, link: j.link })) } }];"
+        "jsCode": "// One Telegram message (HTML) with the best new jobs and run stats.\nconst TOP_ALWAYS = 5, MAX_JOBS = 10, GOOD = 70;\nconst safe = name => { try { return $(name).all().map(i => i.json); } catch (e) { return null; } };\nconst esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst scored = (safe('Parse scores') || []).filter(j => j.id);\nconst de = (safe('Map to job schema') || []).filter(j => j.id).length;\nconst uk = (safe('Map UK to job schema') || []).filter(j => j.id).length;\nconst failed = [];\nif ((safe('BA search') || []).some(j => j.error) || !de) failed.push('Bundesagentur');\nif ((safe('Adzuna search') || []).some(j => j.error) || !uk) failed.push('Adzuna');\nconst unscored = scored.filter(j => j.score == null).length;\n\nconst ranked = scored.filter(j => j.score != null);\nconst picks = ranked.filter((j, i) => i < TOP_ALWAYS || j.score >= GOOD).slice(0, MAX_JOBS);\n\nconst day = new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' });\nconst lines = [`<b>JobPilot · ${esc(day)}</b>`,\n  `${de} DE + ${uk} London jobs fetched · ${scored.length} new scored · ${ranked.filter(j => j.score >= GOOD).length} at ${GOOD}+`];\nif (failed.length) lines.push(`⚠️ No jobs from: ${failed.join(', ')} (source failed or returned nothing)`);\nif (unscored) lines.push(`⚠️ ${unscored} job(s) not scored (model error)`);\nlines.push('');\nif (!picks.length) {\n  lines.push('No new PM jobs today.');\n} else {\n  picks.forEach((j, n) => {\n    const where = [j.company, j.location].filter(Boolean).map(esc).join(' · ');\n    const via = j.attribution === 'Adzuna' ? ' · via <a href=\"https://www.adzuna.co.uk\">Adzuna</a>' : '';\n    lines.push(`${n + 1}. <b>${j.score}</b> · <a href=\"${esc(j.link)}\">${esc(j.title)}</a>`);\n    lines.push(`${where} · ${j.market}${via}`);\n    lines.push(`<i>${esc(j.reason)}</i>`);\n    lines.push('');\n  });\n}\nlet text = lines.join('\\n').trim();\nif (text.length > 4000) text = text.slice(0, 3990) + '\\n…';   // Telegram limit is 4096\nreturn [{ json: { text, picks: picks.map(j => ({ id: j.id, score: j.score, market: j.market, title: j.title, company: j.company, link: j.link })) } }];"
       }
     },
     {
@@ -545,7 +545,7 @@
       ],
       "notes": "P2-07 eval: today's picks as CSV rows with an empty 'relevant' column.",
       "parameters": {
-        "jsCode": "// One CSV row per job sent in today's digest, for the P2-07 eval.\n// The PM fills in 'relevant' (Y/N) by hand. No picks: nothing is written.\nconst picks = $input.first().json.picks || [];\nif (!picks.length) return [];\nconst date = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Berlin' });   // YYYY-MM-DD\nconst cell = v => { const s = String(v ?? '').replace(/[\\r\\n]+/g, ' '); return /[\",]/.test(s) ? '\"' + s.replace(/\"/g, '\"\"') + '\"' : s; };\nconst csv = picks.map((j, i) => [date, i + 1, j.score, j.market, j.title, j.company, j.link, j.id, '', ''].map(cell).join(',')).join('\\n') + '\\n';\nreturn [{ json: { csv, rows: picks.length } }];"
+        "jsCode": "// One CSV row per job sent in today's digest, for the P2-07 eval.\n// The PM fills in 'relevant' (Y/N) by hand. No picks: nothing is written.\nconst picks = $input.first().json.picks || [];\nif (!picks.length) return [];\nconst date = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });   // YYYY-MM-DD\nconst cell = v => { const s = String(v ?? '').replace(/[\\r\\n]+/g, ' '); return /[\",]/.test(s) ? '\"' + s.replace(/\"/g, '\"\"') + '\"' : s; };\nconst csv = picks.map((j, i) => [date, i + 1, j.score, j.market, j.title, j.company, j.link, j.id, '', ''].map(cell).join(',')).join('\\n') + '\\n';\nreturn [{ json: { csv, rows: picks.length } }];"
       }
     },
     {
@@ -594,7 +594,7 @@
       ],
       "notes": "All jobs scored today as CSV rows, for browsing in a spreadsheet.",
       "parameters": {
-        "jsCode": "// Every job scored today, one CSV row each, so the PM can browse them all in a spreadsheet.\nlet jobs = [];\ntry { jobs = $('Parse scores').all().map(i => i.json).filter(j => j.id); } catch (e) { return []; }   // no new jobs today\nif (!jobs.length) return [];\nconst date = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Berlin' });   // YYYY-MM-DD\nconst cell = v => { const s = String(v ?? '').replace(/[\\r\\n]+/g, ' '); return /[\",]/.test(s) ? '\"' + s.replace(/\"/g, '\"\"') + '\"' : s; };\nconst csv = jobs.map(j => [date, j.score ?? '', j.market, j.title, j.company, j.location, j.reason, (j.flags || []).join(' '), j.link, j.id]\n  .map(cell).join(',')).join('\\n') + '\\n';\nreturn [{ json: { csv, rows: jobs.length } }];"
+        "jsCode": "// Every job scored today, one CSV row each, so the PM can browse them all in a spreadsheet.\nlet jobs = [];\ntry { jobs = $('Parse scores').all().map(i => i.json).filter(j => j.id); } catch (e) { return []; }   // no new jobs today\nif (!jobs.length) return [];\nconst date = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });   // YYYY-MM-DD\nconst cell = v => { const s = String(v ?? '').replace(/[\\r\\n]+/g, ' '); return /[\",]/.test(s) ? '\"' + s.replace(/\"/g, '\"\"') + '\"' : s; };\nconst csv = jobs.map(j => [date, j.score ?? '', j.market, j.title, j.company, j.location, j.reason, (j.flags || []).join(' '), j.link, j.id]\n  .map(cell).join(',')).join('\\n') + '\\n';\nreturn [{ json: { csv, rows: jobs.length } }];"
       }
     },
     {
